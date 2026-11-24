@@ -1,6 +1,6 @@
 # Million-Dollar Blueprint: mariamkaldas.com rebuild
 
-**Status: awaiting your approval.** This is the Phase 1 design document. No code has been written, no app scaffolded, no packages installed.
+**Status: approved and built (Phase 2).** This is the Phase 1 design document. Where the build differs from it, see the *Phase 2 as-built addendum* at the end of this file and the README's "Deviations" section.
 **Companion:** `MARIAM_SITE_AUDIT.md` (evidence, verbatim copy, asset catalog). Same evidence tags: **[V]** verified in this work · **[S]** third-party source · **[E]** estimate or recommendation · **[Q]** needs Mariam's confirmation.
 
 ---
@@ -616,3 +616,22 @@ Environmental portrait (editorial, tall crop, room for text) · working portrait
 - Calendly: [Advanced embed for developers](https://calendly.com/help/advanced-calendly-embed-for-developers) · [Pre-fill invitee information](https://calendly.com/help/how-to-pre-fill-invitee-information-in-an-embed)
 - Embedded-booking claims (vendor sources, unverified multipliers): [Cal.com](https://cal.com/blog/best-embed-scheduling-widget) · [SchedulingKit](https://schedulingkit.com/blog/how-to-embed-scheduling-on-website) · [CozyCal](https://www.cozycal.com/blog/embed-schedulings-software-on-websites)
 - Background verification: [Wikipedia: The Scholar Ship](https://en.wikipedia.org/wiki/The_Scholar_Ship) · [FMS 2012 profile](https://franciscanmissionservice.org/2012/04/national-volunteer-month-profile-mariam-in-dc/) · [FMS 2014 post](https://franciscanmissionservice.org/2014/12/bonds-of-friendship/) · [ICF PCC requirements](https://coachingfederation.org/credentialing/icf-credentials-overview/pcc/)
+
+---
+
+## Phase 2 as-built addendum (2026-11-24)
+
+Approved decisions D1 to D4 and D8 were applied as written. Where the build differs from the plan above:
+
+| Plan | As built | Why |
+|---|---|---|
+| Routes `/work-with-me`, `/client-stories`; FAQ folded into `/work-with-me#faq` (sections 4.10, 5.1, 5.2) | Routes `/about`, `/testimonials`, `/faq`, `/book`, `/privacy`. Team (MBTI) sessions answered in `/faq#teams` | The Phase 2 instruction named these four subpages, and `/testimonials` and `/faq` need no redirect because they keep their old URLs |
+| Redirect map with 301 (5.2) | Same intent, adjusted for the routes above, sent as **308** (`config/redirects.mjs`) | Next.js sends `permanent: true` as 308, which search engines treat as permanent |
+| Calendly at `calendly.com/mariamkaldas` (decision D3 as written) | `calendly.com/kaldas/sample` | `/mariamkaldas` returns 404; `/kaldas` and `/kaldas/sample` return 200 |
+| `motion` (Framer Motion) with `useScroll` (section 6) | CSS plus a ~100-line scroll controller; no animation library | Keeps the JavaScript budget as low as the framework allows; same visual result |
+| Voyage with 7 stops incl. College Park (4.6) | 6 stops as listed in the Phase 2 instruction; the University of Maryland is told within the Thessaloniki and Scholar Ship chapters | Matches the requested route; avoids stacked markers (Washington and College Park are about 15 km apart) |
+| Nodemailer rejected in favor of Resend (section 6) | Resend preferred, Nodemailer SMTP as a fallback provider | Both were requested; provider chosen by environment variables |
+| Initial JS budget "about 170 KB gzipped" (section 6) | **155 KB at load, 177 KB after idle prefetch** | Framework floor (React DOM plus Next runtime) is about 122 KB; see the README for the breakdown and why a sub-100 KB figure is not reachable on Next.js |
+
+New findings recorded during the build: the domain has **no DKIM and no DMARC** record today (see the README DNS section),
+and Calendly delivers prefill to the embed by `postMessage`, not in the iframe URL.
