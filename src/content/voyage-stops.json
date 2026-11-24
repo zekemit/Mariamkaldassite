@@ -1,0 +1,12 @@
+{
+  "_note": "Shared by src/content/voyage.ts and scripts/build-map.mjs. Coordinates are city level where known. 'sea' is an illustrative waypoint in the Mediterranean (public record: the 2007 voyage departed from Greece); 'lane' is an illustrative Greece-to-Hong-Kong sea lane for the 2007 inaugural voyage. Ports Mariam has not confirmed are intentionally not named.",
+  "stops": [
+    { "id": "charlottesville", "lat": 38.03, "lon": -78.48 },
+    { "id": "thessaloniki", "lat": 40.64, "lon": 22.94 },
+    { "id": "sea", "lat": 34.6, "lon": 19.5 },
+    { "id": "zambia", "lat": -13.1, "lon": 28.0 },
+    { "id": "washington", "lat": 38.9, "lon": -77.04 },
+    { "id": "charleston", "lat": 32.78, "lon": -79.93 }
+  ],
+  "lane": { "from": "sea", "to": { "id": "hongkong", "lat": 22.32, "lon": 114.17 } }
+}
