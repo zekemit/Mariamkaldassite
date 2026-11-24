@@ -9,6 +9,7 @@ import { Mirror } from '@/components/mirror';
 import { StoriesTeaser } from '@/components/stories-teaser';
 import { Voyage } from '@/components/voyage';
 import { HOME_DESCRIPTION, HOME_TITLE } from '@/content/site';
+import { getSiteContent } from '@/lib/cms-storage';
 import { graph, pageMetadata, personSchema, serviceSchema } from '@/lib/seo';
 
 export const metadata: Metadata = pageMetadata({
@@ -19,18 +20,21 @@ export const metadata: Metadata = pageMetadata({
 });
 
 /** The eight-part flow: hero, credentials, Mirror, method, Voyage, client stories, booking band, FAQ. */
-export default function HomePage() {
+export default async function HomePage() {
+  const content = await getSiteContent();
+  const { settings } = content;
+
   return (
     <>
-      <JsonLd data={graph(serviceSchema(), personSchema())} />
-      <Hero />
-      <CredentialStrip />
-      <Mirror />
-      <Method />
+      <JsonLd data={graph(serviceSchema(settings), personSchema(settings))} />
+      <Hero hero={content.hero} />
+      <CredentialStrip items={content.about.strip} />
+      <Mirror prompts={content.mirror.prompts} />
+      <Method pillars={content.pillars} />
       <Voyage />
-      <StoriesTeaser />
+      <StoriesTeaser stories={content.testimonials} />
       <BookingBand />
-      <FaqTeaser />
+      <FaqTeaser items={content.faq} contact={settings} />
     </>
   );
 }

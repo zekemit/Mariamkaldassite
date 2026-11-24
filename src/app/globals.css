@@ -1061,7 +1061,9 @@
     text-decoration-thickness: 2px;
   }
 
+  /* Tailwind's preflight zeroes every margin, including the `margin: auto` that centres a modal <dialog>. */
   dialog.book-dialog {
+    margin: auto;
     width: min(60rem, calc(100vw - 1.5rem));
     max-height: calc(100svh - 1.5rem);
     padding: 0;
@@ -1326,6 +1328,102 @@
   }
 
   .legal {
+    font-size: 0.9375rem;
+    color: var(--ink-soft);
+  }
+
+  /* Announcement banner (editable at /admin) --------------------------------------- */
+  .announce {
+    background: var(--color-navy);
+    color: var(--color-alabaster);
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  .announce__inner {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem 1rem;
+    margin-block: 0;
+    padding-block: 0.7rem;
+    text-align: center;
+  }
+
+  .announce__link {
+    color: var(--color-alabaster);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: var(--color-brass);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.3em;
+  }
+
+  .announce__link:hover {
+    text-decoration-thickness: 3px;
+  }
+
+  /* Popup modal (editable at /admin) ------------------------------------------------ */
+  dialog.site-popup {
+    margin: auto;
+    width: min(34rem, calc(100vw - 1.5rem));
+    max-height: calc(100svh - 1.5rem);
+    padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: var(--color-alabaster);
+    color: var(--color-navy);
+    overflow: auto;
+    overscroll-behavior: contain;
+    box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--color-navy) 70%, transparent);
+  }
+
+  dialog.site-popup::backdrop {
+    background: color-mix(in srgb, var(--color-navy) 72%, transparent);
+  }
+
+  .site-popup__media {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background: var(--color-oyster);
+  }
+
+  .site-popup__body {
+    padding: clamp(1.5rem, 4vw, 2.25rem);
+  }
+
+  .site-popup__close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 2;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 0;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-alabaster) 92%, transparent);
+    color: var(--color-navy);
+    font-size: 1.75rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    dialog.site-popup[open] {
+      animation: popup-in 0.25s ease-out;
+    }
+
+    @keyframes popup-in {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+    }
+  }
+
+  .story-role {
+    display: block;
+    font-weight: 400;
     font-size: 0.9375rem;
     color: var(--ink-soft);
   }

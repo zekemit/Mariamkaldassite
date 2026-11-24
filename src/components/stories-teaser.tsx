@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { StoryCard } from '@/components/story-card';
-import { featuredStoryIds, stories } from '@/content/testimonials';
+import type { Testimonial } from '@/lib/cms-schema';
+import { countWord } from '@/lib/typo';
 
-/** Home page proof: three featured stories (one per leading theme) and a path to all seven. */
-export function StoriesTeaser() {
-  const featured = featuredStoryIds
-    .map((id) => stories.find((story) => story.id === id))
-    .filter((story): story is NonNullable<typeof story> => Boolean(story));
+/** Home page proof: the stories marked "Featured on Homepage" (or the first three if none are), and a path to all. */
+export function StoriesTeaser({ stories }: { stories: readonly Testimonial[] }) {
+  const flagged = stories.filter((story) => story.featured);
+  const featured = flagged.length > 0 ? flagged : stories.slice(0, 3);
+  if (featured.length === 0) return null;
 
   return (
     <section id="stories" aria-labelledby="stories-title" className="section">
@@ -23,7 +24,7 @@ export function StoriesTeaser() {
         </ul>
         <p className="mt-12">
           <Link href="/testimonials" className="link-quiet">
-            Read all seven client stories
+            {stories.length === 1 ? 'Read the client story' : `Read all ${countWord(stories.length)} client stories`}
           </Link>
         </p>
       </div>

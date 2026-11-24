@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { SITE } from '@/content/site';
+import { getSiteContent } from '@/lib/cms-storage';
 import { pageMetadata } from '@/lib/seo';
 
 export const metadata: Metadata = pageMetadata({
@@ -8,7 +9,8 @@ export const metadata: Metadata = pageMetadata({
   path: '/privacy',
 });
 
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const { settings } = await getSiteContent();
   return (
     <div className="wrap section">
       <h1 className="display-2">Privacy</h1>
@@ -16,8 +18,8 @@ export default function PrivacyPage() {
         <p>
           This site is run by {SITE.legalName} ({SITE.locality}, {SITE.regionName}). It is built to collect as little
           as possible. Questions or requests about your information: email{' '}
-          <a className="link-quiet" href={`mailto:${SITE.email}`}>
-            {SITE.email}
+          <a className="link-quiet" href={`mailto:${settings.email}`}>
+            {settings.email}
           </a>
           .
         </p>

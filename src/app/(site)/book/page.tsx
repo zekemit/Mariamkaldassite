@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { BookingPanel } from '@/components/booking-panel';
 import { ContactForm } from '@/components/contact-form';
-import { SITE } from '@/content/site';
+import { getSiteContent } from '@/lib/cms-storage';
+import { toTelHref } from '@/lib/safe-url';
 import { pageMetadata } from '@/lib/seo';
 
 export const metadata: Metadata = pageMetadata({
@@ -11,7 +12,8 @@ export const metadata: Metadata = pageMetadata({
   path: '/book',
 });
 
-export default function BookPage() {
+export default async function BookPage() {
+  const { settings } = await getSiteContent();
   return (
     <div className="wrap section">
       <div className="grid gap-14 lg:grid-cols-[minmax(0,4fr)_minmax(0,7fr)] lg:gap-16">
@@ -29,12 +31,12 @@ export default function BookPage() {
           <h2 className="font-display mt-12 text-[1.5rem] leading-tight">Prefer to talk first?</h2>
           <p className="mt-3">
             Call or text{' '}
-            <a className="link-quiet" href={`tel:${SITE.phoneTel}`}>
-              {SITE.phoneDisplay}
+            <a className="link-quiet" href={`tel:${toTelHref(settings.phone)}`}>
+              {settings.phone}
             </a>
             , or email{' '}
-            <a className="link-quiet" href={`mailto:${SITE.email}`}>
-              {SITE.email}
+            <a className="link-quiet" href={`mailto:${settings.email}`}>
+              {settings.email}
             </a>
             .
           </p>

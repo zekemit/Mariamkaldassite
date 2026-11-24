@@ -12,7 +12,9 @@ const csp = [
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "img-src 'self' data: blob:",
+  // https: because images at /admin can point anywhere (a popup photo, a credential badge); the editor only
+  // accepts http(s) and site paths for them, and nothing here can run script.
+  "img-src 'self' data: blob: https:",
   "font-src 'self'",
   "style-src 'self' 'unsafe-inline' https://assets.calendly.com",
   `script-src 'self' 'unsafe-inline' https://assets.calendly.com${plausibleDomain ? ' https://plausible.io' : ''}`,
@@ -33,6 +35,8 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  // The local-development content store is read at runtime when Upstash is not connected; make sure it ships.
+  outputFileTracingIncludes: { '/**': ['./data/site-content.json'] },
   images: {
     formats: ['image/avif', 'image/webp'],
     qualities: [75],
@@ -57,6 +61,18 @@ const nextConfig: NextConfig = {
           },
           ...(isProd ? [{ key: 'Content-Security-Policy', value: csp }] : []),
         ],
+      },
+      {
+        // The admin portal and its API are never indexed or cached.
+        source: '/admin/:path*',
+        headers: [
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' },
+          { key: 'Cache-Control', value: 'no-store' },
+        ],
+      },
+      {
+        source: '/api/admin/:path*',
+        headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }],
       },
       {
         // Keep every *.vercel.app deployment out of search results; the live domain is unaffected.

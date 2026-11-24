@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
 import { BookingBand } from '@/components/booking-band';
 import { StoriesExplorer } from '@/components/stories-explorer';
+import { getSiteContent } from '@/lib/cms-storage';
 import { pageMetadata } from '@/lib/seo';
 
 export const metadata: Metadata = pageMetadata({
   title: 'Client Stories',
   description:
-    'Seven clients on what changed after coaching with Mariam Kaldas: career pivots, mindset shifts, leadership breakthroughs and accountability.',
+    'Clients on what changed after coaching with Mariam Kaldas: career pivots, mindset shifts, leadership breakthroughs and accountability.',
   path: '/testimonials',
 });
 
-export default function TestimonialsPage() {
+export default async function TestimonialsPage() {
+  const { testimonials } = await getSiteContent();
   return (
     <>
       <div className="wrap section">
@@ -19,7 +21,7 @@ export default function TestimonialsPage() {
           In their own words, what changed. Filter by the kind of change that matters to you.
         </p>
         <div className="mt-12">
-          <StoriesExplorer />
+          <StoriesExplorer stories={testimonials} />
         </div>
       </div>
       <BookingBand location="stories" />

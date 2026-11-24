@@ -1,9 +1,11 @@
 import { BookingDialog } from '@/components/booking-dialog';
 import { BookLink } from '@/components/book-link';
-import { SITE } from '@/content/site';
+import { getSiteContent } from '@/lib/cms-storage';
+import { toTelHref } from '@/lib/safe-url';
 
 /** Closing conversion band (dark chapter). `location` tags the CTA for analytics. */
-export function BookingBand({ location = 'band' }: { location?: string }) {
+export async function BookingBand({ location = 'band' }: { location?: string }) {
+  const { settings } = await getSiteContent();
   return (
     <section id="book-band" aria-labelledby="band-title" className="section on-dark">
       <div className="wrap-narrow">
@@ -20,12 +22,12 @@ export function BookingBand({ location = 'band' }: { location?: string }) {
         </div>
         <p className="soft mt-8 text-[1.0625rem]">
           Prefer to talk first? Call or text{' '}
-          <a className="link-quiet" href={`tel:${SITE.phoneTel}`}>
-            {SITE.phoneDisplay}
+          <a className="link-quiet" href={`tel:${toTelHref(settings.phone)}`}>
+            {settings.phone}
           </a>{' '}
           or write to{' '}
-          <a className="link-quiet" href={`mailto:${SITE.email}`}>
-            {SITE.email}
+          <a className="link-quiet" href={`mailto:${settings.email}`}>
+            {settings.email}
           </a>
           .
         </p>

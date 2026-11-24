@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { SITE } from '@/content/site';
-import { faqItems, type FaqItem } from '@/content/faq';
+import type { FaqEntry, SiteSettings } from '@/lib/cms-schema';
+import { parseAnswer } from '@/lib/rich-text-markup';
+import { toTelHref } from '@/lib/safe-url';
 
 const OG_IMAGE = {
   url: '/og.jpg',
@@ -52,7 +54,12 @@ function credential(name: string, issuer?: string) {
   };
 }
 
-export function personSchema() {
+/** Profiles Mariam has filled in at /admin; schema.org `sameAs` ties them to this person. */
+function sameAs(settings: SiteSettings): string[] {
+  return [settings.linkedin, settings.instagram, settings.facebook].filter((url) => url !== '');
+}
+
+export function personSchema(settings: SiteSettings) {
   return {
     '@type': 'Person',
     '@id': personId,
@@ -62,8 +69,9 @@ export function personSchema() {
       'Co-Active (CPCC), ICF (PCC) and MBTI coach for driven leaders and professionals at a turning point. Formerly External Engagement Advisor at the U.S. Department of State.',
     url: SITE.url,
     image: `${SITE.url}/images/mariam-hero.jpg`,
-    email: SITE.email,
-    telephone: SITE.phoneTel,
+    email: settings.email,
+    telephone: toTelHref(settings.phone),
+    ...(sameAs(settings).length ? { sameAs: sameAs(settings) } : {}),
     address: {
       '@type': 'PostalAddress',
       addressLocality: SITE.locality,
@@ -90,7 +98,7 @@ export function personSchema() {
   };
 }
 
-export function serviceSchema() {
+export function serviceSchema(settings: SiteSettings) {
   return {
     '@type': 'ProfessionalService',
     '@id': serviceId,
@@ -98,8 +106,9 @@ export function serviceSchema() {
     legalName: SITE.legalName,
     url: SITE.url,
     image: `${SITE.url}/images/mariam-hero.jpg`,
-    telephone: SITE.phoneTel,
-    email: SITE.email,
+    telephone: toTelHref(settings.phone),
+    email: settings.email,
+    ...(sameAs(settings).length ? { sameAs: sameAs(settings) } : {}),
     serviceType: 'Leadership coaching',
     address: {
       '@type': 'PostalAddress',
@@ -135,14 +144,14 @@ export function graph(...nodes: object[]) {
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Plain-text/HTML answer for FAQPage markup (link tokens resolved to words and URLs). */
-function answerHtml(item: FaqItem): string {
+function answerHtml(item: FaqEntry, settings: SiteSettings): string {
   const resolve = (s: string) =>
     s
-      .replaceAll('{{email}}', SITE.email)
-      .replaceAll('{{phone}}', SITE.phoneDisplay)
+      .replaceAll('{{email}}', settings.email)
+      .replaceAll('{{phone}}', settings.phone)
       .replaceAll('{{book}}', `Book a complimentary chemistry session at ${SITE.url}/book.`)
       .replaceAll('{{contact}}', `Send a note at ${SITE.url}/book#contact.`);
-  return item.a
+  return parseAnswer(item.answer)
     .map((block) =>
       'p' in block
         ? `<p>${escapeHtml(resolve(block.p))}</p>`
@@ -151,13 +160,13 @@ function answerHtml(item: FaqItem): string {
     .join('');
 }
 
-export function faqSchema(items: readonly FaqItem[] = faqItems) {
+export function faqSchema(items: readonly FaqEntry[], settings: SiteSettings) {
   return {
     '@type': 'FAQPage',
     mainEntity: items.map((item) => ({
       '@type': 'Question',
-      name: item.q,
-      acceptedAnswer: { '@type': 'Answer', text: answerHtml(item) },
+      name: item.question,
+      acceptedAnswer: { '@type': 'Answer', text: answerHtml(item, settings) },
     })),
   };
 }

@@ -1,41 +1,62 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { countByTag, featuredStoryIds, stories, storyTags } from '@/content/testimonials';
+import { defaultSiteContent } from '@/content/defaults';
 import { chapters, stopCoordinates } from '@/content/voyage';
-import { mirrorStatements } from '@/content/mirror';
-import { faqItems, homeFaqIds } from '@/content/faq';
 import { WORLD_MAP } from '@/content/world-map.generated';
+import { STORY_TAGS, siteContentSchema } from '@/lib/cms-schema';
+import { ANSWER_TOKENS, parseAnswer, serializeAnswer } from '@/lib/rich-text-markup';
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 const audit = norm(readFileSync(path.resolve(__dirname, '../../../MARIAM_SITE_AUDIT.md'), 'utf8'));
 
-describe('testimonials', () => {
-  it('has all seven published clients', () => {
-    expect(stories.map((s) => s.name)).toEqual(['Kevin C.', 'Indy', 'Reuschal', 'Monica', 'Dan', 'Josh', 'Margarita']);
+const { testimonials, mirror, faq } = defaultSiteContent;
+
+describe('default content', () => {
+  it('is valid against the CMS schema (so Reset to Defaults can always be saved)', () => {
+    const result = siteContentSchema.safeParse(defaultSiteContent);
+    expect(result.success, JSON.stringify(result.error?.issues)).toBe(true);
   });
 
-  it('matches the audit taxonomy counts (5 / 3 / 3 / 1)', () => {
-    expect(storyTags.map((tag) => countByTag(tag))).toEqual([5, 3, 3, 1]);
-    for (const story of stories) {
-      expect(story.tags.length).toBeGreaterThan(0);
-      for (const tag of story.tags) expect(storyTags).toContain(tag);
-    }
+  it('seeds the live site with the confirmed contact facts and the hero headline', () => {
+    expect(defaultSiteContent.settings.email).toBe('me@mariamkaldas.com');
+    expect(defaultSiteContent.settings.phone).toBe('(843) 936-1601');
+    expect(defaultSiteContent.settings.location).toBe('Charleston, SC & Worldwide via Zoom');
+    expect(defaultSiteContent.settings.calendlyUrl).toBe('https://calendly.com/kaldas/sample');
+    expect(defaultSiteContent.hero.headline).toBe('You meet every deadline except your own.');
+  });
+
+  it('starts with the announcement and popup switched off', () => {
+    expect(defaultSiteContent.announcement.enabled).toBe(false);
+    expect(defaultSiteContent.popup.enabled).toBe(false);
+  });
+});
+
+describe('testimonials', () => {
+  it('has all seven published clients, in the order Mariam listed them', () => {
+    expect(testimonials.map((s) => s.name)).toEqual(['Kevin C.', 'Reuschal', 'Indy', 'Monica', 'Margarita', 'Dan', 'Josh']);
+  });
+
+  it('matches the audit taxonomy counts (5 / 3 / 3 / 1) under the new tag names', () => {
+    const counts = STORY_TAGS.map((tag) => testimonials.filter((s) => s.tags.includes(tag)).length);
+    expect(STORY_TAGS).toEqual(['Mindset Shift', 'Career Pivot', 'Leadership & Confidence', 'Accountability & Action']);
+    expect(counts).toEqual([5, 3, 3, 1]);
+    for (const story of testimonials) expect(story.tags.length).toBeGreaterThan(0);
   });
 
   it('keeps every sentence verbatim against the audit record (no invented or altered words)', () => {
-    for (const story of stories) {
-      for (const paragraph of story.paragraphs) {
+    for (const story of testimonials) {
+      for (const paragraph of story.text.split('\n\n')) {
         for (const sentence of paragraph.split(/(?<=[.!?])\s+/)) {
           expect(audit, `${story.name}: "${sentence}"`).toContain(norm(sentence));
         }
       }
-      expect(norm(story.paragraphs.join(' ')), `${story.name} pull quote`).toContain(norm(story.pullQuote));
+      expect(norm(story.text), `${story.name} pull quote`).toContain(norm(story.pullQuote));
     }
   });
 
-  it('features existing stories', () => {
-    for (const id of featuredStoryIds) expect(stories.some((s) => s.id === id)).toBe(true);
+  it('features three stories on the home page, one per leading theme', () => {
+    expect(testimonials.filter((s) => s.featured).map((s) => s.id)).toEqual(['reuschal', 'indy', 'margarita']);
   });
 });
 
@@ -66,24 +87,28 @@ describe('voyage', () => {
 
 describe('mirror and faq', () => {
   it('turns the seven reflection questions into seven unique statements with replies', () => {
-    expect(mirrorStatements).toHaveLength(7);
-    expect(new Set(mirrorStatements.map((s) => s.text)).size).toBe(7);
-    for (const s of mirrorStatements) expect(s.reply.length).toBeGreaterThan(10);
+    expect(mirror.prompts).toHaveLength(7);
+    expect(new Set(mirror.prompts.map((s) => s.text)).size).toBe(7);
+    for (const s of mirror.prompts) expect(s.reply.length).toBeGreaterThan(10);
   });
 
-  it('uses only known link tokens and the home teaser ids exist', () => {
-    const known = new Set(['{{email}}', '{{phone}}', '{{book}}', '{{contact}}']);
-    for (const item of faqItems) {
-      for (const block of item.a) {
-        const texts = 'p' in block ? [block.p] : block.ul;
-        for (const text of texts) for (const token of text.match(/\{\{\w+\}\}/g) ?? []) expect(known.has(token)).toBe(true);
-      }
+  it('uses only known link tokens, and the home teaser has questions to show', () => {
+    const known = new Set<string>(ANSWER_TOKENS);
+    for (const item of faq) {
+      for (const token of item.answer.match(/\{\{\w+\}\}/g) ?? []) expect(known.has(token)).toBe(true);
     }
-    for (const id of homeFaqIds) expect(faqItems.some((i) => i.id === id)).toBe(true);
+    expect(faq.filter((i) => i.showOnHome).map((i) => i.id)).toEqual(['hour', 'who', 'where', 'why']);
+  });
+
+  it('round-trips every default answer through the editor markup without changing it', () => {
+    for (const item of faq) {
+      const blocks = parseAnswer(item.answer);
+      expect(blocks.length).toBeGreaterThan(0);
+      expect(serializeAnswer(blocks)).toBe(item.answer);
+    }
   });
 
   it('never publishes a hardcoded price', () => {
-    const copy = JSON.stringify(faqItems);
-    expect(copy).not.toMatch(/\$\s?\d/);
+    expect(JSON.stringify(faq)).not.toMatch(/\$\s?\d/);
   });
 });

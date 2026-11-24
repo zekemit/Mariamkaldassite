@@ -2,25 +2,29 @@
 
 import Link from 'next/link';
 import { useId } from 'react';
-import { mirrorNotForYou, mirrorStatements, mirrorStatus } from '@/content/mirror';
+import { mirrorNotForYou, mirrorStatus } from '@/content/mirror';
 import { BOOK_LABEL } from '@/content/site';
+import type { MirrorPrompt } from '@/lib/cms-schema';
 import { track } from '@/lib/analytics';
-import { bookHref } from '@/lib/mirror-state';
+import { bookHref, resolveSelection } from '@/lib/mirror-state';
 import { setMirrorSelection, useMirrorSelection } from '@/lib/mirror-store';
 
 /**
- * "The Mirror": the seven reflection questions from the old home page as tap-to-select statements.
+ * "The Mirror": the reflection statements from the old home page as tap-to-select statements (editable at /admin).
  * Replies reveal with CSS alone (:has(:checked)), so the section reads fine without JavaScript.
- * The selection is remembered for the tab and travels to /book as indices, where it pre-fills Calendly.
+ * The selection is remembered for the tab and travels to /book as statement ids, where it pre-fills Calendly.
  */
-export function Mirror() {
-  const selected = useMirrorSelection();
+export function Mirror({ prompts }: { prompts: readonly MirrorPrompt[] }) {
+  const stored = useMirrorSelection();
   const baseId = useId();
 
-  const toggle = (index: number) => {
-    const next = selected.includes(index) ? selected.filter((i) => i !== index) : [...selected, index];
+  // A remembered id whose statement was since deleted is simply ignored.
+  const selected = resolveSelection(stored, prompts).map((prompt) => prompt.id);
+
+  const toggle = (id: string) => {
+    const next = selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id];
     setMirrorSelection(next);
-    track('mirror_select', { index, count: next.length });
+    track('mirror_select', { prompt: id, count: next.length });
   };
 
   const status =
@@ -37,26 +41,26 @@ export function Mirror() {
         <fieldset className="m-0 mt-10 border-0 p-0">
           <legend className="sr-only">Statements that might sound like you</legend>
           <ul className="mirror-list">
-            {mirrorStatements.map((statement, index) => {
+            {prompts.map((prompt, index) => {
               const id = `${baseId}-${index}`;
-              const checked = selected.includes(index);
+              const checked = selected.includes(prompt.id);
               return (
-                <li key={statement.id} className="mirror-item">
+                <li key={prompt.id} className="mirror-item">
                   <label className="mirror-label" htmlFor={id}>
                     <input
                       id={id}
                       className="mirror-input"
                       type="checkbox"
                       checked={checked}
-                      onChange={() => toggle(index)}
-                      aria-describedby={checked ? `${id}-reply` : undefined}
+                      onChange={() => toggle(prompt.id)}
+                      aria-describedby={checked && prompt.reply ? `${id}-reply` : undefined}
                     />
                     <span className="mirror-box" aria-hidden="true" />
-                    <span className="mirror-text">{statement.text}</span>
+                    <span className="mirror-text">{prompt.text}</span>
                   </label>
                   <div className="mirror-reply" id={`${id}-reply`}>
                     <div>
-                      <p>{statement.reply}</p>
+                      <p>{prompt.reply}</p>
                     </div>
                   </div>
                 </li>

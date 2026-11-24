@@ -2,9 +2,12 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import { BookingBand } from '@/components/booking-band';
 import { JsonLd } from '@/components/json-ld';
-import { aboutHeading, aboutParagraphs, cornerstones, cornerstonesSource } from '@/content/about';
-import { credentials } from '@/content/credentials';
+import { CmsLink } from '@/components/cms-link';
+import { cornerstones, cornerstonesSource } from '@/content/about';
+import { getSiteContent } from '@/lib/cms-storage';
+import { safeImageSrc } from '@/lib/safe-url';
 import { graph, pageMetadata, personSchema } from '@/lib/seo';
+import { typo } from '@/lib/typo';
 
 export const metadata: Metadata = pageMetadata({
   title: 'About: CPCC, PCC and MBTI Coach',
@@ -13,20 +16,21 @@ export const metadata: Metadata = pageMetadata({
   path: '/about',
 });
 
-export default function AboutPage() {
-  const [lead, ...rest] = aboutParagraphs;
+export default async function AboutPage() {
+  const { about, settings } = await getSiteContent();
+  const [lead, ...rest] = about.paragraphs;
 
   return (
     <>
-      <JsonLd data={graph(personSchema())} />
+      <JsonLd data={graph(personSchema(settings))} />
       <div className="wrap section">
         <div className="grid gap-14 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-20">
           <div>
-            <h1 className="display-2 max-w-[20ch]">{aboutHeading}</h1>
+            <h1 className="display-2 max-w-[20ch]">{about.heading}</h1>
             <div className="prose mt-10">
-              <p className="prose-lead">{lead}</p>
-              {rest.map((paragraph) => (
-                <p key={paragraph}>{paragraph}</p>
+              <p className="prose-lead">{typo(lead)}</p>
+              {rest.map((paragraph, index) => (
+                <p key={index}>{typo(paragraph)}</p>
               ))}
             </div>
           </div>
@@ -48,40 +52,40 @@ export default function AboutPage() {
           </aside>
         </div>
 
-        <section aria-labelledby="creds-title" className="mt-24 max-w-[44rem]">
-          <h2 id="creds-title" className="display-3">
-            Credentials
-          </h2>
-          <ul className="cred-ledger mt-6">
-            {credentials.map((credential) => (
-              <li key={credential.code}>
-                {credential.badge ? (
-                  <Image
-                    src={credential.badge.src}
-                    alt={credential.badge.alt}
-                    width={credential.badge.width}
-                    height={credential.badge.height}
-                    className="h-auto w-16"
-                  />
-                ) : (
-                  <span className="cred-code">{credential.code}</span>
-                )}
-                <div>
-                  <p className="m-0 font-semibold">
-                    <span className="cred-code mr-2">{credential.code}</span>
-                    {credential.title}
-                  </p>
-                  <p className="soft m-0 text-[1rem]">
-                    Issued through{' '}
-                    <a className="link-quiet" href={credential.href} target="_blank" rel="noopener noreferrer">
-                      {credential.issuer}
-                    </a>
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+        {about.credentials.length > 0 ? (
+          <section aria-labelledby="creds-title" className="mt-24 max-w-[44rem]">
+            <h2 id="creds-title" className="display-3">
+              Credentials
+            </h2>
+            <ul className="cred-ledger mt-6">
+              {about.credentials.map((credential) => {
+                const badge = safeImageSrc(credential.badgeSrc);
+                return (
+                  <li key={credential.id}>
+                    {badge ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- small editor-supplied badge of unknown size
+                      <img src={badge} alt={credential.badgeAlt} loading="lazy" decoding="async" referrerPolicy="no-referrer" className="h-auto w-16" />
+                    ) : (
+                      <span className="cred-code">{credential.code}</span>
+                    )}
+                    <div>
+                      <p className="m-0 font-semibold">
+                        <span className="cred-code mr-2">{credential.code}</span>
+                        {credential.title}
+                      </p>
+                      <p className="soft m-0 text-[1rem]">
+                        Issued through{' '}
+                        <CmsLink className="link-quiet" href={credential.href}>
+                          {credential.issuer}
+                        </CmsLink>
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ) : null}
 
         <section aria-labelledby="model-title" className="mt-24 max-w-[44rem]">
           <h2 id="model-title" className="display-3">

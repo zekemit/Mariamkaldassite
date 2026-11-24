@@ -1,31 +1,29 @@
-import Image from 'next/image';
 import type { CSSProperties } from 'react';
 import { BookLink } from '@/components/book-link';
+import { CmsImage } from '@/components/cms-image';
 import { SITE } from '@/content/site';
+import type { SiteContent } from '@/lib/cms-schema';
+import { splitHeadline } from '@/lib/headline';
 
 const line = (i: number) => ({ '--i': i }) as CSSProperties;
 
-export function Hero() {
+export function Hero({ hero }: { hero: SiteContent['hero'] }) {
   return (
     <section aria-labelledby="hero-title" className="wrap">
       <div className="hero-grid">
         <div>
           <h1 id="hero-title" className="display-1">
-            <span className="hero-line" style={line(0)}>
-              <span>You meet every deadline</span>
-            </span>
-            <span className="hero-line" style={line(1)}>
-              <span>except your own.</span>
-            </span>
+            {splitHeadline(hero.headline).map((text, index) => (
+              <span key={index} className="hero-line" style={line(index)}>
+                <span>{text}</span>
+              </span>
+            ))}
           </h1>
 
-          <p className="lede mt-7 max-w-[34rem]">
-            Co-Active (CPCC), ICF (PCC) and MBTI coaching for driven leaders and professionals at a turning point.
-            Honest straight talk, in Charleston and over Zoom, wherever you are.
-          </p>
+          <p className="lede mt-7 max-w-[34rem]">{hero.subheadline}</p>
 
           <div className="mt-9 flex flex-wrap items-center gap-x-8 gap-y-4">
-            <BookLink location="hero" />
+            <BookLink location="hero">{hero.ctaLabel}</BookLink>
             <a href="#mirror" className="link-quiet">
               See if this is for you
             </a>
@@ -36,14 +34,7 @@ export function Hero() {
 
         <figure className="hero-figure">
           <div className="hero-figure__frame">
-            <Image
-              src="/images/mariam-hero.jpg"
-              alt="Mariam Kaldas smiling over a cup of tea at a stone table above a wide blue lake"
-              fill
-              preload
-              sizes="(min-width: 64rem) 40vw, 100vw"
-              className="object-cover"
-            />
+            <CmsImage src={hero.portraitSrc} alt={hero.portraitAlt} sizes="(min-width: 64rem) 40vw, 100vw" priority />
           </div>
           <figcaption className="mono-note">
             <span>

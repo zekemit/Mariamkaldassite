@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { FaqList } from '@/components/faq-list';
-import { faqItems, homeFaqIds } from '@/content/faq';
+import type { ContactDetails } from '@/components/rich-text';
+import type { FaqEntry } from '@/lib/cms-schema';
 
-export function FaqTeaser() {
-  const items = homeFaqIds
-    .map((id) => faqItems.find((item) => item.id === id))
-    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+/** The questions marked "Show on homepage" (the first four if none are). The full list lives on /faq. */
+export function FaqTeaser({ items, contact }: { items: readonly FaqEntry[]; contact: ContactDetails }) {
+  const flagged = items.filter((item) => item.showOnHome);
+  const shown = flagged.length > 0 ? flagged : items.slice(0, 4);
+  if (shown.length === 0) return null;
 
   return (
     <section id="faq" aria-labelledby="faq-title" className="section">
@@ -14,7 +16,7 @@ export function FaqTeaser() {
           Questions people ask first
         </h2>
         <div className="mt-10">
-          <FaqList items={items} />
+          <FaqList items={shown} contact={contact} />
         </div>
         <p className="mt-10">
           <Link href="/faq" className="link-quiet">

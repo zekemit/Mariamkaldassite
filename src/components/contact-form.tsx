@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { SITE } from '@/content/site';
+import { useSiteSettings } from '@/components/site-settings-provider';
 import { track } from '@/lib/analytics';
 import { TOPICS, TOPIC_LABELS } from '@/lib/contact-topics';
 
@@ -11,10 +11,10 @@ type State =
   | { status: 'sent' }
   | { status: 'error'; message: string; fieldErrors?: Record<string, string> };
 
-const GENERIC_ERROR = `That didn’t send. Check the details, or write to ${SITE.email} directly.`;
-
 /** Inquiry fallback: posts to /api/contact (validated, rate-limited, honeypot-protected, delivered by email). */
 export function ContactForm() {
+  const { email: contactEmail } = useSiteSettings();
+  const genericError = `That didn’t send. Check the details, or write to ${contactEmail} directly.`;
   const [state, setState] = useState<State>({ status: 'idle' });
   const startedAt = useRef(0);
 
@@ -58,18 +58,18 @@ export function ContactForm() {
       } else if (response.status === 429) {
         setState({
           status: 'error',
-          message: `You’ve sent a few messages in a short time. Please wait a few minutes, or email ${SITE.email} directly.`,
+          message: `You’ve sent a few messages in a short time. Please wait a few minutes, or email ${contactEmail} directly.`,
         });
       } else if (response.status === 503) {
         setState({
           status: 'error',
-          message: `The message form isn’t available right now. Please write to ${SITE.email} directly.`,
+          message: `The message form isn’t available right now. Please write to ${contactEmail} directly.`,
         });
       } else {
-        setState({ status: 'error', message: GENERIC_ERROR });
+        setState({ status: 'error', message: genericError });
       }
     } catch {
-      setState({ status: 'error', message: GENERIC_ERROR });
+      setState({ status: 'error', message: genericError });
     }
   }
 

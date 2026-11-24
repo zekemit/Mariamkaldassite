@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { BookingBand } from '@/components/booking-band';
 import { FaqList } from '@/components/faq-list';
 import { JsonLd } from '@/components/json-ld';
-import { faqItems } from '@/content/faq';
+import { getSiteContent } from '@/lib/cms-storage';
 import { faqSchema, graph, pageMetadata } from '@/lib/seo';
 
 export const metadata: Metadata = pageMetadata({
@@ -12,14 +12,15 @@ export const metadata: Metadata = pageMetadata({
   path: '/faq',
 });
 
-export default function FaqPage() {
+export default async function FaqPage() {
+  const { faq, settings } = await getSiteContent();
   return (
     <>
-      <JsonLd data={graph(faqSchema())} />
+      <JsonLd data={graph(faqSchema(faq, settings))} />
       <div className="wrap-narrow section">
         <h1 className="display-2">So you have some questions…</h1>
         <div className="mt-12">
-          <FaqList items={faqItems} openFirst />
+          <FaqList items={faq} contact={settings} openFirst />
         </div>
       </div>
       <BookingBand location="faq-band" />

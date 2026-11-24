@@ -1,41 +1,61 @@
 import { describe, expect, it } from 'vitest';
-import { bookHref, parseQuery, sanitizeIndices, toQuery } from '@/lib/mirror-state';
+import { bookHref, parseQuery, resolveSelection, sanitizeIds, toQuery } from '@/lib/mirror-state';
 import { buildEmbedOptions, buildFallbackUrl, composeMirrorAnswer, themedUrl } from '@/lib/calendly';
-import { mirrorStatements } from '@/content/mirror';
+import { defaultSiteContent } from '@/content/defaults';
 import { legacyRedirects } from '../../../config/redirects.mjs';
 
+const prompts = defaultSiteContent.mirror.prompts;
+const text = (id: string) => prompts.find((p) => p.id === id)!.text;
+
 describe('mirror selection state', () => {
-  it('keeps only unique, in-range integers, sorted', () => {
-    expect(sanitizeIndices([3, 1, 1, 99, -1, 'x', 2.5, '2'])).toEqual([1, 2, 3]);
-    expect(sanitizeIndices('nope')).toEqual([]);
+  it('keeps only unique, well-formed ids, in the order given', () => {
+    expect(sanitizeIds(['talent', 'impact', 'talent', 'Not Valid', '<b>', 42, '', 'a'.repeat(60)])).toEqual(['talent', 'impact']);
+    expect(sanitizeIds('nope')).toEqual([]);
+  });
+
+  it('drops ids that no longer exist when given the current prompt ids', () => {
+    expect(sanitizeIds(['impact', 'deleted-one'], prompts.map((p) => p.id))).toEqual(['impact']);
   });
 
   it('round-trips through the query string and builds /book links', () => {
-    expect(toQuery([4, 1])).toBe('m=1,4');
-    expect(parseQuery('?m=1,4')).toEqual([1, 4]);
+    expect(toQuery(['talent', 'impact'])).toBe('m=talent,impact');
+    expect(parseQuery('?m=talent,impact')).toEqual(['talent', 'impact']);
     expect(parseQuery('?m=')).toEqual([]);
     expect(parseQuery('?other=1')).toBeNull();
     expect(bookHref([])).toBe('/book');
-    expect(bookHref([2, 0])).toBe('/book?m=0,2');
+    expect(bookHref(['deadlines', 'scared'])).toBe('/book?m=deadlines,scared');
   });
 
   it('drops tampered query values instead of trusting them', () => {
-    expect(parseQuery('?m=0,<script>,8,3')).toEqual([0, 3]);
+    expect(parseQuery('?m=impact,<script>,%3Cimg%20src=x%3E,../etc,talent')).toEqual(['impact', 'talent']);
+  });
+
+  it('resolves a selection to the current prompts in page order, ignoring ids that were deleted', () => {
+    expect(resolveSelection(['scared', 'impact', 'gone'], prompts).map((p) => p.id)).toEqual(['impact', 'scared']);
+  });
+
+  it('keeps pointing at the same statements after the prompts are reordered (the reason ids are used)', () => {
+    const reordered = [...prompts].reverse();
+    expect(resolveSelection(['deadlines'], reordered).map((p) => p.text)).toEqual([text('deadlines')]);
   });
 });
 
 describe('Calendly prefill', () => {
-  it('composes the first custom answer (a1) from the selected statements, in order', () => {
-    const answer = composeMirrorAnswer([1, 0]);
-    expect(answer).toBe(
-      `What sounded like me:\n- ${mirrorStatements[0].text}\n- ${mirrorStatements[1].text}`,
-    );
-    expect(composeMirrorAnswer([])).toBeUndefined();
+  it('composes the first custom answer (a1) from the selected statements, in page order', () => {
+    expect(composeMirrorAnswer(['deadlines', 'impact'], prompts)).toBe(`What sounded like me:\n- ${text('impact')}\n- ${text('deadlines')}`);
+    expect(composeMirrorAnswer([], prompts)).toBeUndefined();
+    expect(composeMirrorAnswer(['deleted'], prompts)).toBeUndefined();
+  });
+
+  it('sends the statement’s current (edited) wording', () => {
+    const edited = prompts.map((p) => (p.id === 'impact' ? { ...p, text: 'Edited in the admin.' } : p));
+    expect(composeMirrorAnswer(['impact'], edited)).toBe('What sounded like me:\n- Edited in the admin.');
   });
 
   it('sends a1 and UTM data only when something was selected', () => {
-    const withSelection = buildEmbedOptions({ baseUrl: 'https://calendly.com/kaldas/sample', selection: [2], source: 'page' });
-    expect(withSelection.prefill.customAnswers?.a1).toContain(mirrorStatements[2].text);
+    const base = 'https://calendly.com/kaldas/sample';
+    const withSelection = buildEmbedOptions({ baseUrl: base, selection: ['humor'], prompts, source: 'page' });
+    expect(withSelection.prefill.customAnswers?.a1).toContain(text('humor'));
     expect(withSelection.utm).toEqual({
       utmSource: 'mariamkaldas.com',
       utmMedium: 'website',
@@ -43,7 +63,7 @@ describe('Calendly prefill', () => {
       utmContent: 'page',
     });
 
-    const without = buildEmbedOptions({ baseUrl: 'https://calendly.com/kaldas/sample', selection: [], source: 'dialog' });
+    const without = buildEmbedOptions({ baseUrl: base, selection: [], prompts, source: 'dialog' });
     expect(without.prefill).toEqual({});
     expect(without.utm.utmCampaign).toBe('direct');
   });
@@ -52,12 +72,10 @@ describe('Calendly prefill', () => {
     expect(themedUrl('https://calendly.com/kaldas/sample')).toBe(
       'https://calendly.com/kaldas/sample?background_color=f8f5ee&text_color=11263c&primary_color=9e3f2b',
     );
-    const url = new URL(
-      buildFallbackUrl({ baseUrl: 'https://calendly.com/kaldas/sample', selection: [0], source: 'page' }),
-    );
+    const url = new URL(buildFallbackUrl({ baseUrl: 'https://calendly.com/kaldas/sample', selection: ['impact'], prompts, source: 'page' }));
     expect(url.origin + url.pathname).toBe('https://calendly.com/kaldas/sample');
     expect(url.searchParams.get('utm_source')).toBe('mariamkaldas.com');
-    expect(url.searchParams.get('a1')).toContain(mirrorStatements[0].text);
+    expect(url.searchParams.get('a1')).toContain(text('impact'));
   });
 });
 

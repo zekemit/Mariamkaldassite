@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { StoryCard } from '@/components/story-card';
-import { countByTag, stories, storyTags, type StoryTag } from '@/content/testimonials';
+import { STORY_TAGS, type StoryTag, type Testimonial } from '@/lib/cms-schema';
 import { track } from '@/lib/analytics';
 
 type Filter = 'All' | StoryTag;
 
-/** All seven client stories, filterable by what changed. Without JavaScript every story is simply listed. */
-export function StoriesExplorer() {
+/** Every client story, filterable by what changed. Without JavaScript every story is simply listed. */
+export function StoriesExplorer({ stories }: { stories: readonly Testimonial[] }) {
   const [filter, setFilter] = useState<Filter>('All');
   const [touched, setTouched] = useState(false);
 
@@ -20,9 +20,12 @@ export function StoriesExplorer() {
     track('story_filter', { tag: next });
   };
 
+  // Only offer a filter for a tag that at least one story uses.
   const options: { label: Filter; count: number }[] = [
     { label: 'All', count: stories.length },
-    ...storyTags.map((tag) => ({ label: tag, count: countByTag(tag) })),
+    ...STORY_TAGS.map((tag) => ({ label: tag, count: stories.filter((story) => story.tags.includes(tag)).length })).filter(
+      (option) => option.count > 0,
+    ),
   ];
 
   return (

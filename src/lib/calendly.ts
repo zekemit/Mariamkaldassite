@@ -1,5 +1,4 @@
-import { mirrorStatements } from '@/content/mirror';
-import { sanitizeIndices } from '@/lib/mirror-state';
+import { resolveSelection, type PromptRef } from '@/lib/mirror-state';
 
 // Calendly custom answers are numbered a1..a10 in the order of the event's questions
 // (https://calendly.com/help/how-to-pre-fill-invitee-information-in-an-embed). The Mirror fills a1, so the
@@ -11,11 +10,11 @@ export interface EmbedOptions {
   utm: { utmSource: string; utmMedium: string; utmCampaign: string; utmContent: string };
 }
 
-export function composeMirrorAnswer(indices: readonly number[]): string | undefined {
-  const valid = sanitizeIndices([...indices]);
-  if (valid.length === 0) return undefined;
-  const lines = valid.map((i) => `- ${mirrorStatements[i].text}`);
-  return `What sounded like me:\n${lines.join('\n')}`;
+/** The first custom answer, built from the statements the visitor tapped (in page order). Undefined when none. */
+export function composeMirrorAnswer(ids: readonly string[], prompts: readonly PromptRef[]): string | undefined {
+  const chosen = resolveSelection(ids, prompts);
+  if (chosen.length === 0) return undefined;
+  return `What sounded like me:\n${chosen.map((prompt) => `- ${prompt.text}`).join('\n')}`;
 }
 
 /** Brand colors for the embedded scheduler (hex without #, as Calendly expects). */
@@ -25,12 +24,15 @@ export function themedUrl(baseUrl: string): string {
   return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${THEME}`;
 }
 
-export function buildEmbedOptions(args: {
+interface Args {
   baseUrl: string;
-  selection: readonly number[];
+  selection: readonly string[];
+  prompts: readonly PromptRef[];
   source: string;
-}): EmbedOptions {
-  const answer = composeMirrorAnswer(args.selection);
+}
+
+export function buildEmbedOptions(args: Args): EmbedOptions {
+  const answer = composeMirrorAnswer(args.selection, args.prompts);
   return {
     url: themedUrl(args.baseUrl),
     prefill: answer ? { customAnswers: { a1: answer } } : {},
@@ -44,7 +46,7 @@ export function buildEmbedOptions(args: {
 }
 
 /** Plain link for the "open in a new tab" fallback; carries the same UTM and prefill. */
-export function buildFallbackUrl(args: { baseUrl: string; selection: readonly number[]; source: string }): string {
+export function buildFallbackUrl(args: Args): string {
   const options = buildEmbedOptions(args);
   const url = new URL(args.baseUrl);
   url.searchParams.set('utm_source', options.utm.utmSource);

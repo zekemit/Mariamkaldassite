@@ -1,29 +1,9 @@
-import { NextResponse } from 'next/server';
 import { checkSpam, validateContact } from '@/lib/contact-schema';
 import { sendContactEmail } from '@/lib/mailer';
 import { attemptLimiter, clientIp, globalLimiter, sendLimiter } from '@/lib/rate-limit';
-import { SITE } from '@/content/site';
+import { isAllowedOrigin, json } from '@/lib/request-guards';
 
 const MAX_BODY_BYTES = 20_000;
-
-const json = (body: Record<string, unknown>, status = 200, headers?: Record<string, string>) =>
-  NextResponse.json(body, { status, headers: { 'Cache-Control': 'no-store', ...headers } });
-
-/** Same-origin only: the form posts from this site, so Origin must match the host (or the canonical site). */
-function isAllowedOrigin(request: Request): boolean {
-  const origin = request.headers.get('origin');
-  if (!origin) return false;
-  let originHost: string;
-  try {
-    originHost = new URL(origin).host;
-  } catch {
-    return false;
-  }
-  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
-  const canonical = new URL(SITE.url).host;
-  const apex = canonical.replace(/^www\./, '');
-  return originHost === host || originHost === canonical || originHost === apex || originHost === `www.${apex}`;
-}
 
 export async function POST(request: Request) {
   if (!isAllowedOrigin(request)) return json({ ok: false, error: 'forbidden' }, 403);

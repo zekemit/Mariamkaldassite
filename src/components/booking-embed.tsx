@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { SITE } from '@/content/site';
+import { useSiteSettings } from '@/components/site-settings-provider';
 import { track } from '@/lib/analytics';
 import { buildEmbedOptions, buildFallbackUrl } from '@/lib/calendly';
+import { resolveSelection, type PromptRef } from '@/lib/mirror-state';
 import { useMirrorSelection } from '@/lib/mirror-store';
 
 declare global {
@@ -56,11 +57,18 @@ type Status = 'loading' | 'ready' | 'error' | 'scheduled';
  * when the selection changes, so each mount initialises exactly once.
  */
 export function BookingEmbed({ source }: { source: string }) {
-  const selection = useMirrorSelection();
+  const { calendlyUrl, email, phone, phoneTel, prompts } = useSiteSettings();
+  const stored = useMirrorSelection();
+  // Only statements that still exist count; each is sent by its current wording.
+  const selected = resolveSelection(stored, prompts).map((prompt) => prompt.id);
+  const selectionKey = selected.join(',');
+  // A string key, not the array: a fresh array with identical content (after a publish refreshes the layout) must
+  // not re-initialise the scheduler in the middle of someone's booking.
+  const promptsKey = JSON.stringify(prompts);
   const hostRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>('loading');
 
-  const fallbackUrl = buildFallbackUrl({ baseUrl: SITE.calendlyUrl, selection, source });
+  const fallbackUrl = buildFallbackUrl({ baseUrl: calendlyUrl, selection: selected, prompts, source });
 
   useEffect(() => {
     const host = hostRef.current;
@@ -76,7 +84,12 @@ export function BookingEmbed({ source }: { source: string }) {
         if (cancelled || !window.Calendly) return;
         host.innerHTML = '';
         window.Calendly.initInlineWidget({
-          ...buildEmbedOptions({ baseUrl: SITE.calendlyUrl, selection, source }),
+          ...buildEmbedOptions({
+            baseUrl: calendlyUrl,
+            selection: selectionKey ? selectionKey.split(',') : [],
+            prompts: JSON.parse(promptsKey) as PromptRef[],
+            source,
+          }),
           parentElement: host,
         });
         setStatus((current) => (current === 'scheduled' ? current : 'ready'));
@@ -91,7 +104,7 @@ export function BookingEmbed({ source }: { source: string }) {
       window.clearTimeout(timeout);
       host.innerHTML = '';
     };
-  }, [selection, source]);
+  }, [selectionKey, calendlyUrl, promptsKey, source]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -99,12 +112,12 @@ export function BookingEmbed({ source }: { source: string }) {
       const data = event.data as { event?: string } | null;
       if (data?.event === 'calendly.event_scheduled') {
         setStatus('scheduled');
-        track('book_scheduled', { source, prefilled: selection.length > 0 });
+        track('book_scheduled', { source, prefilled: selectionKey !== '' });
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [source, selection.length]);
+  }, [source, selectionKey]);
 
   return (
     <div>
@@ -138,12 +151,12 @@ export function BookingEmbed({ source }: { source: string }) {
             </p>
             <p className="text-[1rem]">
               Or call or text{' '}
-              <a className="link-quiet" href={`tel:${SITE.phoneTel}`}>
-                {SITE.phoneDisplay}
+              <a className="link-quiet" href={`tel:${phoneTel}`}>
+                {phone}
               </a>
               , or email{' '}
-              <a className="link-quiet" href={`mailto:${SITE.email}`}>
-                {SITE.email}
+              <a className="link-quiet" href={`mailto:${email}`}>
+                {email}
               </a>
               .
             </p>
@@ -157,12 +170,12 @@ export function BookingEmbed({ source }: { source: string }) {
           Open it in a new tab
         </a>
         , or reach me at{' '}
-        <a className="link-quiet" href={`tel:${SITE.phoneTel}`}>
-          {SITE.phoneDisplay}
+        <a className="link-quiet" href={`tel:${phoneTel}`}>
+          {phone}
         </a>{' '}
         or{' '}
-        <a className="link-quiet" href={`mailto:${SITE.email}`}>
-          {SITE.email}
+        <a className="link-quiet" href={`mailto:${email}`}>
+          {email}
         </a>
         .
       </p>

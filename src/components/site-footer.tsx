@@ -1,8 +1,17 @@
 import Link from 'next/link';
 import { NAV, SITE } from '@/content/site';
 import { BookLink } from '@/components/book-link';
+import { CmsLink } from '@/components/cms-link';
+import type { SiteSettings } from '@/lib/cms-schema';
+import { toTelHref } from '@/lib/safe-url';
 
-export function SiteFooter() {
+export function SiteFooter({ settings }: { settings: SiteSettings }) {
+  const social = [
+    { label: 'LinkedIn', href: settings.linkedin },
+    { label: 'Instagram', href: settings.instagram },
+    { label: 'Facebook', href: settings.facebook },
+  ].filter((item) => item.href !== '');
+
   return (
     <footer className="site-footer">
       <div className="wrap footer-grid">
@@ -39,22 +48,28 @@ export function SiteFooter() {
           <h2 className="font-sans text-[1rem] font-semibold">Contact</h2>
           <ul className="footer-links mt-3">
             <li>
-              <a className="link-quiet" href={`mailto:${SITE.email}`}>
-                {SITE.email}
+              <a className="link-quiet" href={`mailto:${settings.email}`}>
+                {settings.email}
               </a>
             </li>
             <li>
-              <a className="link-quiet" href={`tel:${SITE.phoneTel}`}>
-                {SITE.phoneDisplay}
+              <a className="link-quiet" href={`tel:${toTelHref(settings.phone)}`}>
+                {settings.phone}
               </a>
             </li>
-            <li>
-              {SITE.locality}, {SITE.regionName}
-            </li>
+            <li>{settings.location}</li>
           </ul>
-          <p className="soft mt-4 max-w-[34ch] text-[1rem]">
-            Sessions over Zoom worldwide, and in person around Charleston.
-          </p>
+          {social.length > 0 ? (
+            <ul className="footer-links mt-3" aria-label="Social media">
+              {social.map((item) => (
+                <li key={item.label}>
+                  <CmsLink href={item.href} className="link-quiet">
+                    {item.label}
+                  </CmsLink>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
 

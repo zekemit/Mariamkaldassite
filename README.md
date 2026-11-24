@@ -6,6 +6,8 @@ verbatim copy from the old site live in [`MARIAM_SITE_AUDIT.md`](MARIAM_SITE_AUD
 
 - **Stack:** Next.js 16 (App Router, Cache Components, TypeScript), Tailwind CSS 4, self-hosted fonts, no UI library.
 - **Pages:** `/` (8-part flow), `/about`, `/testimonials` (client stories), `/faq`, `/book`, `/privacy`, `/api/contact`.
+- **Admin portal:** `/admin` lets Mariam edit the banner, popup, headline, testimonials, FAQ, bio, booking link and
+  contact details herself, live, with no code and no deploy (see "Admin portal").
 - **Design system:** Alabaster, Oyster, Harbor Navy, Haint Blue, Brass, Brick. Brick red is used for booking actions only.
   Type: Newsreader (display), Source Sans 3 (text), DM Mono (credential codes, years, coordinates only).
 
@@ -17,7 +19,8 @@ verbatim copy from the old site live in [`MARIAM_SITE_AUDIT.md`](MARIAM_SITE_AUD
 pinned to 22.x in the project settings (the version this was built and tested on).
 
 Until `RESEND_API_KEY` is added in Vercel, the contact form answers 503 and tells the visitor to email Mariam directly.
-The booking flow (Calendly) works as soon as it is deployed.
+The booking flow (Calendly) works as soon as it is deployed. Until `ADMIN_PASSWORD` and an Upstash database are added
+(next section), `/admin` explains that it is not switched on yet and the site shows its built-in copy.
 
 ## Quick start
 
@@ -35,15 +38,93 @@ npm run dev                    # http://localhost:3000
 | `node scripts/optimize-images.mjs <dir>` | Re-creates the optimized portraits and badges from Mariam's original files |
 | `node scripts/build-brand-assets.mjs` | Re-renders `public/og.jpg`, `apple-icon.png`, `favicon.ico` (needs Playwright) |
 | `npm run verify` | Live-browser audit of a running build (needs Playwright): errors, 4xx, images, CTA position, request counts, WCAG contrast, axe |
+| `npm run verify:admin` | Live-browser test of the admin portal (needs Playwright, `ADMIN_PASSWORD`, and a **throwaway** content store; see the script header) |
+| `npm run seed:cms` | Creates `data/site-content.json` from the default copy (`-- --force` overwrites it) |
+
+## Admin portal (`/admin`)
+
+Mariam signs in at **`/admin`** with one password and edits five tabs, then presses **Save & Publish Changes**. The live
+site updates on the next page view, with no deploy.
+
+| Tab | What she can change |
+|---|---|
+| Banner & Popup | Announcement banner (on/off, text, optional link) · popup (on/off, headline, message, optional image, button text, button goes to the booking page or a link, once per session or every visit) |
+| Home Page | Hero headline, sub-headline, main button text, portrait image · the "Does any of this sound like you?" statements and replies (add, edit, reorder, delete); these pre-fill the Calendly booking |
+| Testimonials | Add, edit, reorder, delete: name or initials, role or context, pull-quote, full text, tags, "Featured on homepage" |
+| About & FAQ | The four coaching pillars · About heading, bio paragraphs, credential badges, the credential strip · FAQ (add, edit, reorder, delete, "Show on homepage") |
+| Booking & Contact | Calendly link · email, phone, location line · LinkedIn, Instagram, Facebook (empty hides the link) |
+
+Also: a sticky save bar, **Reset to Defaults** (asks first; restores the original verified copy), toast messages, **View
+live site** in a new tab, `Ctrl/Cmd+S` to publish, and a warning before leaving with unpublished edits.
+
+### One-time setup on Vercel (about five minutes)
+
+1. **Choose the password.** Vercel → the `mariamkaldas` project → Settings → Environment Variables → add
+   `ADMIN_PASSWORD` for **Production** (and Preview if you want it there). Use a long passphrase (16+ characters) and mark it
+   *Sensitive*. Optionally add `ADMIN_SESSION_SECRET` (output of `openssl rand -base64 32`).
+2. **Add the database.** Project → **Storage** → *Create Database* → **Upstash for Redis** (free plan is plenty), accept the
+   defaults, and **connect it to this project for Production**. Vercel then adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`
+   for you. (If you create the database at upstash.com instead, add its REST URL and token as `UPSTASH_REDIS_REST_URL` and
+   `UPSTASH_REDIS_REST_TOKEN`.) Pick the region closest to the deployment region.
+3. **Redeploy** (Deployments → the latest one → ⋯ → Redeploy). Environment variables only reach *new* deployments.
+4. Open `https://<your-domain>/admin`, sign in, edit, **Save & Publish Changes**. The editor shows
+   "Storage: Upstash Redis" when the database is connected, and "Not connected" (with saving switched off) when it is not.
+
+### How it works
+
+- **Storage** (`src/lib/cms-storage.ts`, the single persistence layer): one JSON document at the Redis key
+  `cms:mariam:content` (Upstash REST API over `fetch`; no SDK and no `@vercel/blob`). With no database configured,
+  local development reads and writes `data/site-content.json`, which is seeded with all the verified copy, so `/admin`
+  works out of the box (`npm run seed:cms` recreates it; `-- --force` discards local edits). Dev edits modify that tracked
+  file: `git checkout data/site-content.json` undoes them.
+- **Going live:** every save runs `revalidateTag('site-content', { expire: 0 })` and `revalidatePath('/', 'layout')`. Every
+  public page, the header, footer, banner and popup read the content through `getSiteContent()`, a cached
+  (`use cache`) function tagged `site-content`, so the pages stay static and fast and refresh the moment something is
+  published. Safety net: even if an invalidation were missed, content refreshes within 5 minutes. Visitors who already have
+  the site open may see the old text on in-site navigation for up to 5 minutes; a reload shows the new text.
+- **Images are addresses, not uploads.** Paste a site path (`/images/mariam-hero.jpg`, optimized by Next.js) or a full
+  `https://` link to an image file (shown as-is). A thumbnail previews it as you type. To add a new *optimized* site image,
+  commit it to `public/images/`.
+- **FAQ answers** are plain text: a blank line starts a paragraph, a line starting with `- ` is a bullet, and the buttons
+  under the box insert live links for the email address, phone number, booking button and contact note.
+
+### Security model
+
+| Concern | What is done |
+|---|---|
+| Sign-in | One shared password compared with `crypto.timingSafeEqual` over SHA-256 digests (constant time, any length). Without `ADMIN_PASSWORD` set, nobody can sign in (an empty password never matches) |
+| Session | Stateless, HMAC-SHA256-signed token in an `HttpOnly`, `SameSite=Lax` cookie, `Secure` and `__Host-` prefixed in production, **7 days**. The token carries a fingerprint of the password, so **changing `ADMIN_PASSWORD` signs every session out** |
+| Brute force | Wrong passwords only: **5 per 15 minutes per IP**, then `429` with `Retry-After`; a short pause after each failure; a success resets the count. Counters live in Redis (shared across serverless instances; IPs are hashed) and fall back to memory if Redis is unreachable, so an outage can neither lock Mariam out nor remove the limit |
+| Writes | Every admin API call needs the signed cookie (else `401`); changes must be same-origin (`Origin` check, else `403`) and JSON (`415`), capped at 400 KB (`413`) |
+| Validation | One `zod` schema (strict: unknown fields rejected, lengths capped, list sizes capped) is applied on save **and again when content is read back**; a section that fails validation falls back to the defaults for that section only |
+| XSS | Content is rendered as text (React escapes it); there is no HTML field. Every link and image address must start with `https://`, `http://`, `mailto:`, `tel:` or `/` (images: `https://`, `http://`, `/`); `javascript:`, `data:`, `vbscript:`, `//host`, backslash tricks and embedded whitespace are refused, and links are re-checked at render time. JSON-LD escapes `<` |
+| Exposure | `/admin` and `/api/admin/*` send `X-Robots-Tag: noindex` (admin pages also `no-store`), a robots `noindex` meta tag, and are disallowed in `robots.txt` |
+
+Known limits, stated plainly: one shared password (no per-person accounts); **Log out clears the cookie but does not
+revoke a copy of it** (tokens are stateless): to cut off every session, change `ADMIN_PASSWORD`; there is no version history
+(Reset to Defaults restores the *original* copy only, so for a backup open the Upstash console and copy the value of
+`cms:mariam:content`); brute-force counters are per IP, so use a long random password.
+
+### What is *not* editable at `/admin`
+
+The Voyage section and map, the engagement steps, the Mirror's status lines, page titles and meta descriptions, the
+Open Graph share image (`public/og.jpg` is a fixed picture of the original headline), and where contact-form messages are
+delivered (`CONTACT_TO_EMAIL`, an environment variable). Those stay in code.
 
 ## Environment variables
 
-Everything is optional; the site builds and runs with none set. Copy [`.env.example`](.env.example).
+Everything is optional; the site builds and runs with none set (the admin portal stays switched off until
+`ADMIN_PASSWORD` and a database are added). Copy [`.env.example`](.env.example).
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_SITE_URL` | `https://www.mariamkaldas.com` | Canonical host for metadata, sitemap and structured data |
-| `NEXT_PUBLIC_CALENDLY_URL` | `https://calendly.com/kaldas/sample` | Event shown in the embedded scheduler |
+| `NEXT_PUBLIC_CALENDLY_URL` | `https://calendly.com/kaldas/sample` | **Default** Calendly event. The live link is edited at `/admin` → Booking & Contact |
+| `ADMIN_PASSWORD` | unset | **Turns on `/admin`.** The one password Mariam signs in with (16+ characters; changing it signs everyone out) |
+| `ADMIN_SESSION_SECRET` | derived from the password | Optional 32+ character random string that signs session cookies |
+| `KV_REST_API_URL` + `KV_REST_API_TOKEN` | unset | **Where edits are saved** (Upstash Redis / Vercel KV). Set automatically by the Upstash integration on Vercel |
+| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | unset | The same thing for a database created directly at upstash.com. Only one pair is needed |
+| `CMS_DATA_FILE` | `data/site-content.json` | Local development only: file used when no Redis is configured |
 | `NEXT_PUBLIC_PLAUSIBLE_DOMAIN` | unset | Loads Plausible (cookieless) when set; the CSP is adjusted automatically |
 | `RESEND_API_KEY` | unset | **Provider 1 for `/api/contact`.** Needs a verified sending domain in Resend |
 | `CONTACT_FROM_EMAIL` | `Mariam Kaldas Website <onboarding@resend.dev>` | Set to an address on the verified domain, e.g. `hello@send.mariamkaldas.com`. The default Resend sender only delivers to the Resend account owner |
@@ -69,9 +150,11 @@ store (Upstash) if hard global limits are ever needed.
   only when a scheduler is shown, never on a normal page load.
 - **The verified account URL is `calendly.com/kaldas`** (`/kaldas/sample` returns 200). `calendly.com/mariamkaldas`
   returns **404**, so it is not used.
-- The Mirror stores tapped statements in the tab (session storage) and links to `/book?m=1,3` (indices only, removed from
-  the address bar after reading). `/book` shows exactly what will be sent and lets the visitor remove it. Selected
-  statements go to Calendly as custom answer **a1** (the widget delivers it to the embed by `postMessage`).
+- The Mirror stores tapped statements in the tab (session storage) and links to `/book?m=deadlines,next-steps`
+  (statement **ids**, never text or positions, so editing, reordering or deleting statements at `/admin` cannot make an
+  old selection or link point at the wrong statement; removed from the address bar after reading). `/book` shows exactly
+  what will be sent and lets the visitor remove it. Selected statements go to Calendly as custom answer **a1** (the widget
+  delivers it to the embed by `postMessage`), using each statement's current wording.
 - **To receive the prefill, add one multi-line question as the *first* question on the `sample` event** ("What brought you
   here?"). Without it Calendly ignores the value.
 - UTM tags (`utm_source=mariamkaldas.com`, `utm_medium=website`, `utm_campaign=mirror|direct`, `utm_content=page|dialog`)
@@ -84,7 +167,8 @@ The repo is Git-integrated. Pushing to `main` deploys production. Any `*.vercel.
 `X-Robots-Tag: noindex, nofollow` automatically (see `next.config.ts`), so the preview can never compete with the live
 Wix site in search. The live domain gets no such header, so there is **no switch to remember at cutover**.
 
-Set these in Vercel → Project → Settings → Environment Variables when ready: `RESEND_API_KEY`, `CONTACT_FROM_EMAIL`.
+Set these in Vercel → Project → Settings → Environment Variables when ready: `RESEND_API_KEY`, `CONTACT_FROM_EMAIL`, and for
+the editor `ADMIN_PASSWORD` plus the Upstash database (see "Admin portal").
 
 ## DNS cutover: Wix → Vercel (preserve email)
 
@@ -147,24 +231,33 @@ because the MX records never changed.
 ## Project layout
 
 ```
-src/app/            routes, layout, fonts, sitemap, robots, icons, api/contact
-src/components/     hero, mirror, method, voyage (+controller), stories, booking embed/dialog/panel, faq, header, footer
-src/content/        all copy and data: site facts, testimonials (verbatim), mirror, method, voyage, faq, about, credentials
-src/lib/            contact schema/mailer/rate limit, Calendly prefill, Mirror store, SEO + JSON-LD builders
-config/redirects.mjs   legacy Wix URL redirects (308), shared with the tests
-scripts/            map, image, brand-asset and verification tooling
+src/app/(site)/     the public pages (own layout: header, footer, banner, popup, analytics)
+src/app/admin/      /admin and /admin/login (own layout and stylesheet; no public chrome)
+src/app/api/        contact, admin/login, admin/logout, admin/content
+src/components/     hero, mirror, method, voyage (+controller), stories, booking, faq, header, footer, popup, banner
+src/components/admin/   the editor: fields, list editor, one panel per tab, login form
+src/content/        defaults.ts (the verified copy), site facts, voyage, static strings
+src/lib/            cms-schema, cms-storage, redis-rest, admin-auth, admin-rate-limit, safe-url, request-guards,
+                    contact schema/mailer/rate limit, Calendly prefill, Mirror store, SEO + JSON-LD builders
+data/site-content.json   local-development content store, seeded from defaults.ts
+config/redirects.mjs     legacy Wix URL redirects (308), shared with the tests
+scripts/            seed-cms, verify (public audit), verify-admin (admin browser test), map/image/brand tooling
 ```
 
-**Editing copy:** change the files in `src/content/` (testimonials, Mirror statements and replies, voyage chapters, FAQ,
-about). Run `npm test`: the testimonials are checked sentence by sentence against the audit's verbatim record.
+**Editing copy:** Mariam edits it at `/admin`. `src/content/defaults.ts` holds the *original* verified copy: it is what the
+site shows before anything is saved and what "Reset to Defaults" restores; change it only to change what "default" means
+(then `npm run seed:cms -- --force`). Run `npm test`: the default testimonials are checked sentence by sentence against the
+audit's verbatim record.
 
 ## Verified results (final build, `next start`, headless Chromium)
 
 | Check | Result |
 |---|---|
 | `npm run lint` · `npm run typecheck` · `npm run build` | Pass, no warnings. All content routes prerender as static |
-| Unit tests (`npm test`) | 32 pass |
+| Unit tests (`npm test`) | 144 pass (content integrity, schema and URL safety, storage against a fake Upstash, auth, throttling, the admin API handlers, Mirror ids, booking prefill, redirects, contact) |
 | Browser flows (Mirror → `/book` prefill, dialog, contact form) | 21 / 21 pass, including Calendly receiving `customAnswers.a1` and the UTM tags |
+| **Admin portal, real browser** (`npm run verify:admin`) | **130 / 130** against the local-file store and **129 / 129** against a Redis (Upstash REST) store: sign-in, wrong password, throttling (429 + `Retry-After`), cookie flags (`__Host-`, Secure, HttpOnly, SameSite=Lax, 7 days), editing every tab, publish, the public pages re-rendering with no redeploy, popup behaviour, XSS text and `javascript:` rejection (form and API), cross-site and forged-cookie refusal, Reset to Defaults, sign-out, phone layout, axe-core on every tab (0 serious or critical) |
+| Admin in the two "not set up yet" states (no `ADMIN_PASSWORD`; password but no Upstash) | No errors. Login says "not switched on yet"; the editor says "Saving is switched off" and disables Save and Reset; the API answers 503 with the reason; public pages keep serving the built-in copy |
 | `/api/contact` security tests | 18 / 18 pass (origin, content type, injection, honeypot, timing, size, 429 + `Retry-After`) |
 | WCAG AA text contrast (computed from real styles, all routes, mobile and desktop, Mirror replies and FAQ answers expanded, menu open) | 0 failures in 196 text runs on the home page and 37 to 76 on every other page |
 | axe-core (desktop, all routes) | 0 violations of any severity |
@@ -177,7 +270,7 @@ about). Run `npm test`: the testimonials are checked sentence by sentence agains
 | Total transfer, home page | about 410 KB (fonts 117 KB, images 30 to 86 KB, CSS 9 KB) |
 
 **Initial JavaScript did not reach the "under 100 KB" goal, and cannot on this framework.** Measured gzipped:
-**155 KB at load** and 177 KB after idle prefetching of other routes. React DOM (71 KB) plus Next's client runtime
+**155 KB at load** and 177 KB after idle prefetching of other routes (after the admin work the phone home page measures about 161 KB at load: the popup, the settings provider and the statements' text add roughly 6 KB; `zod` and the admin code are still not in any public page's bundle). React DOM (71 KB) plus Next's client runtime
 (46.5 KB) plus the bundler runtime (4.8 KB) are about 122 KB before any site code; the site's own code and the router add
 about 33 KB. What was done to keep it as small as possible: server components by default, no animation library (the
 Voyage is CSS plus a 100-line scroll controller), the Calendly integration is split out and only loads on `/book` or when
@@ -198,15 +291,28 @@ its JavaScript on desktop). That cost is Calendly's, and no other page pays it.
 4. **Nodemailer is included alongside Resend** (as requested); Resend is preferred when its key is set.
 5. **Cache Components and Partial Prefetching are on**, as the scaffold generated them. They are the framework's
    direction, and the site is fully static.
-6. Verified-fact corrections applied in copy: "Ikagai" (old FAQ) becomes "Ikigai"; "30 different countries" becomes
+6. **Admin portal choices.** (a) Upstash is reached with a small `fetch` client over its REST API, not the SDK: no new
+   dependency, the same protocol Vercel KV uses. (b) The testimonial tags are renamed to your four (`Career Pivot`,
+   `Leadership & Confidence`, `Accountability & Action`, `Mindset Shift`), a 1:1 rename of the earlier four, and a story can
+   carry more than one (the verified 5 / 3 / 3 / 1 counts depend on it). (c) FAQ entries have a "Show on homepage" switch
+   (replacing the fixed list of four), and the coaching pillars are always exactly four (edit and reorder only). (d) Social
+   links start empty: none were found on the old site, so none are invented. (e) "Every visit" means every full page load
+   (not every in-site click). (f) The popup never opens over `/book` or `/privacy`. (g) The Mirror selection moved from
+   positions to ids (see "Booking") so edits cannot mis-map it. (h) Pages keep the verified static performance profile:
+   content is `use cache`d with a 5-minute safety refresh, and the tag invalidation on save makes edits immediate.
+7. **Two bugs found and fixed while verifying the admin work.** The booking dialog from Phase 2 opened pinned to the
+   top-left corner instead of centred (Tailwind's reset removes the `margin: auto` that centres a modal `<dialog>`); it and
+   the new popup and confirmation dialogs are now centred and covered by tests. The admin tab labels were first rendered
+   in the header's light text colour on a light background (axe caught it).
+8. Verified-fact corrections applied in copy: "Ikagai" (old FAQ) becomes "Ikigai"; "30 different countries" becomes
    "30+ countries"; "helped to design and establish" (her wording) is kept, never "founded"; she lives in Charleston
    (no "roots" claim); the CPCC and PCC credentials are real text, not only images; the footer email link is
    `mailto:me@mariamkaldas.com` (the old site linked `info@mysite.com`).
 
 ## Needs Mariam's approval before the live cutover
 
-- **Bio edits** in `src/content/about.ts` and `voyage.ts` (typos fixed; "30+ countries"). The family line is hers; confirm she wants it public.
-- **Draft copy written for her to rewrite:** Mirror replies, "so what" lines under each Voyage chapter, the sample questions under each method pillar, the engagement path steps.
+- **Bio edits** (now editable at `/admin` → About & FAQ; the original is in `src/content/defaults.ts`) and the Voyage in `voyage.ts` (typos fixed; "30+ countries"). The family line is hers; confirm she wants it public.
+- **Draft copy written for her to rewrite:** Mirror replies and the sample questions under each pillar (both editable at `/admin`), the "so what" lines under each Voyage chapter and the engagement path steps (in code).
 - **Facts:** "One hour" comes from her Wix service page (confirm the Calendly event length); "Formerly U.S. Department of State"; the Voyage's "Route illustrative" arc (ports not confirmed); the exact State Department title and dates.
 - **Testimonials** are first names only, verbatim, including their typos ("she's help me identify"); confirm she may publish them and wants any light copy edits. Add roles or full names with permission.
 - **Credential links** point to the issuing bodies' sites. Replace with her verification pages if she has them.
