@@ -9,6 +9,16 @@ verbatim copy from the old site live in [`MARIAM_SITE_AUDIT.md`](MARIAM_SITE_AUD
 - **Design system:** Alabaster, Oyster, Harbor Navy, Haint Blue, Brass, Brick. Brick red is used for booking actions only.
   Type: Newsreader (display), Source Sans 3 (text), DM Mono (credential codes, years, coordinates only).
 
+## Live preview
+
+**https://mariamkaldas.vercel.app** is the Vercel project `mariamkaldas`, Git-integrated with this repo: every push to
+`main` deploys to production automatically, and other branches get preview URLs. The URL is public but sends
+`X-Robots-Tag: noindex`, so search engines ignore it until the real domain is cut over (see "DNS cutover"). Node is
+pinned to 22.x in the project settings (the version this was built and tested on).
+
+Until `RESEND_API_KEY` is added in Vercel, the contact form answers 503 and tells the visitor to email Mariam directly.
+The booking flow (Calendly) works as soon as it is deployed.
+
 ## Quick start
 
 ```bash
@@ -159,6 +169,7 @@ about). Run `npm test`: the testimonials are checked sentence by sentence agains
 | WCAG AA text contrast (computed from real styles, all routes, mobile and desktop, Mirror replies and FAQ answers expanded, menu open) | 0 failures in 196 text runs on the home page and 37 to 76 on every other page |
 | axe-core (desktop, all routes) | 0 violations of any severity |
 | Console errors, HTTP ≥ 400, broken images (own pages) | None (the 404 page is intentional) |
+| The same suites against the **live deployment** (`mariamkaldas.vercel.app`) | Audit passes (0 contrast failures, 0 axe violations); 18 / 18 applicable browser flows pass; contact endpoint answers 503 until email keys exist and 403 for cross-origin posts; LCP 280 to 604 ms on Vercel's CDN, CLS ≤ 0.002 |
 | One `<h1>` per page, `lang`, description, canonical, `og:image`, valid JSON-LD | Pass on all routes |
 | Hero booking CTA without scrolling | Visible at 360×640, 390×664, 390×844, 768×1024, 1280×720, 1440×900 (top edge 422 px on phones, 631 px on desktop; the old site: 1,188 px and 1,292 px, as plain text) |
 | CLS | 0.000 on every page |
